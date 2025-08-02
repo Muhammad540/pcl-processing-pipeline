@@ -6,20 +6,31 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 project(pointcloud_processing_pipeline VERSION 1.0.0)
 
 find_package(PCL 1.2 REQUIRED)
-
-include_directories(${PCL_INCLUDE_DIRS})
-include_directories(include)
-
-link_directories(${PCL_LIBRARY_DIRS})
-add_definitions(${PCL_DEFINITIONS})
 list(REMOVE_ITEM PCL_LIBRARIES "vtkproj4")
 
-add_executable(${PROJECT_NAME} src/main.cpp)
-target_link_libraries(${PROJECT_NAME} ${PCL_LIBRARIES})
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra)
+add_library(pcl_processor_lib INTERFACE)
+
+target_include_directories(pcl_processor_lib INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/${PROJECT_NAME}>
+)
+
+target_link_libraries(pcl_processor_lib INTERFACE ${PCL_LIBRARIES})
+target_include_directories(pcl_processor_lib INTERFACE ${PCL_INCLUDE_DIRS})
+target_compile_definitions(pcl_processor_lib INTERFACE ${PCL_DEFINITIONS})
+
+
+add_executable(pcl_processor_example src/main.cpp)
+
+target_link_libraries(pcl_processor_example PRIVATE pcl_processor_lib)
+target_compile_options(pcl_processor_example PRIVATE -Wall -Wextra)
 
 configure_file(${CMAKE_SOURCE_DIR}/src/config.txt ${CMAKE_BINARY_DIR}/config.txt COPYONLY)
 
-install(TARGETS ${PROJECT_NAME} DESTINATION bin)
-install(DIRECTORY include/ DESTINATION include)
+
+install(DIRECTORY include/
+    DESTINATION include/${PROJECT_NAME}
+)
+
+install(TARGETS pcl_processor_example DESTINATION bin)
 install(FILES src/config.txt DESTINATION share/${PROJECT_NAME})

@@ -1,7 +1,22 @@
-#include "processor.h"
+#include <random>
+#include <fstream>
+#include <sstream>
+#include <map>
+#include <filesystem>
+#include <algorithm>
+#include <iostream>
 
 template<typename PointType>
 Processor<PointType>::Processor() {}
+
+template<typename PointType>
+Processor<PointType>::Processor(const std::string& configFile) {
+    if (!loadConfig(configFile)){
+        std::cerr << "Failed to load configuration file" << std::endl;
+    }
+
+    std::cout << "configuration loaded successfully" << std::endl;
+}
 
 template<typename PointType>
 Processor<PointType>::~Processor() {}
@@ -10,8 +25,7 @@ template<typename PointType>
 typename pcl::PointCloud<PointType>::Ptr Processor<PointType>::filterCloud(
     typename pcl::PointCloud<PointType>::Ptr cloud,
     float filterResolution, 
-    Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint, 
-    bool enableCropBox){
+    Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint){
 
     // Reference: https://pointclouds.org/documentation/tutorials/voxel_grid.html and https://pointclouds.org/documentation/classpcl_1_1_crop_box_3_01pcl_1_1_p_c_l_point_cloud2_01_4.html
     // ============= VOXEL GRID DOWNSAMPLING ============= 
@@ -20,36 +34,36 @@ typename pcl::PointCloud<PointType>::Ptr Processor<PointType>::filterCloud(
     sor.setInputCloud(cloud);
     sor.setLeafSize(filterResolution, filterResolution, filterResolution);
     sor.filter(*filteredcloud);
-
-    // ============= CROP YOUR REGION OF INTEREST TO KEEP ONLY THE POINTS WITHIN MIN-MAX RANGE ============= 
-    if(enableCropBox){
-        typename pcl::PointCloud<PointType>::Ptr croppedcloud = std::make_shared<pcl::PointCloud<PointType>>();
-        pcl::CropBox<PointType> cropBoxFilter(true);
-        cropBoxFilter.setInputCloud(filteredcloud);
-        cropBoxFilter.setMin(minPoint);
-        cropBoxFilter.setMax(maxPoint);
-        cropBoxFilter.filter(*croppedcloud);
-        return croppedcloud;
-    } else {
-        return filteredcloud;
+    
+    if (config_.enableCropBox) {
+        typename pcl::PointCloud<PointType>::Ptr croppedCloud = std::make_shared<pcl::PointCloud<PointType>>();
+        pcl::CropBox<PointType> cropBox;
+        cropBox.setInputCloud(filteredcloud);
+        cropBox.setMin(minPoint);
+        cropBox.setMax(maxPoint);
+        cropBox.filter(*croppedCloud);
+        return croppedCloud;
     }
+
+    return filteredcloud;
 }
 
 template<typename PointType>
 typename pcl::PointCloud<PointType>::Ptr Processor<PointType>::removeRegion(
     typename pcl::PointCloud<PointType>::Ptr cloud,
     Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint){
-    
-    typename pcl::PointCloud<PointType>::Ptr cloud_filtered = std::make_shared<pcl::PointCloud<PointType>>();
+
+    typename pcl::PointCloud<PointType>::Ptr remainingCloud = std::make_shared<pcl::PointCloud<PointType>>();
     std::vector<int> indices;
-    pcl::CropBox<PointType> cropBoxFilter(true);
-    cropBoxFilter.setInputCloud(cloud);
-    cropBoxFilter.setMin(minPoint);
-    cropBoxFilter.setMax(maxPoint);
-    cropBoxFilter.filter(indices);
+
+    pcl::CropBox<PointType> regionfilter(true);
+    regionfilter.setInputCloud(cloud);
+    regionfilter.setMin(minPoint);
+    regionfilter.setMax(maxPoint);
+    regionfilter.filter(indices);
     
     pcl::PointIndices::Ptr inliers = std::make_shared<pcl::PointIndices>();
-    for (int index : indices) {
+    for (int index : indices){
         inliers->indices.push_back(index);
     }
 
@@ -57,29 +71,28 @@ typename pcl::PointCloud<PointType>::Ptr Processor<PointType>::removeRegion(
     extract.setInputCloud(cloud);
     extract.setIndices(inliers);
     extract.setNegative(true);
-    extract.filter(*cloud_filtered);
+    extract.filter(*remainingCloud);
 
-    return cloud_filtered;
+    return remainingCloud;
 }
 
 template<typename PointType>
 std::pair<typename pcl::PointCloud<PointType>::Ptr, typename pcl::PointCloud<PointType>::Ptr> Processor<PointType>::separateClouds(
-    pcl::PointIndices::Ptr inliers, 
-    typename pcl::PointCloud<PointType>::Ptr cloud){
-
+    pcl::PointIndices::Ptr inliers, typename pcl::PointCloud<PointType>::Ptr cloud){
+    
     typename pcl::PointCloud<PointType>::Ptr obstacleCloud = std::make_shared<pcl::PointCloud<PointType>>();
     typename pcl::PointCloud<PointType>::Ptr planeCloud = std::make_shared<pcl::PointCloud<PointType>>();
-    pcl::ExtractIndices<PointType> extract;
 
+    pcl::ExtractIndices<PointType> extract;
     for (int index : inliers->indices){
-        planeCloud->points.push_back(cloud->points[index])
+        planeCloud->points.push_back(cloud->points[index]);
     }
 
     extract.setInputCloud(cloud);
     extract.setIndices(inliers);
     extract.setNegative(true);
     extract.filter(*obstacleCloud);
-    
+
     std::pair<typename pcl::PointCloud<PointType>::Ptr, typename pcl::PointCloud<PointType>::Ptr> segResult(obstacleCloud, planeCloud);
     return segResult;
 }
@@ -192,9 +205,9 @@ BoundingBoxQ Processor<PointType>::boundingBoxQ(typename pcl::PointCloud<PointTy
     BoundingBoxQ box;
     box.bboxTransform = bboxTransform;
     box.bboxQuaternion = bboxQuaternion;
-    box.cube_length = maxPoint.x - minPoint.x;
-    box.cube_width = maxPoint.y - minPoint.y;
-    box.cube_height = maxPoint.z - minPoint.z;
+    box.box_length = maxPoint.x - minPoint.x;
+    box.box_width = maxPoint.y - minPoint.y;
+    box.box_height = maxPoint.z - minPoint.z;
     
     return box;
 }
@@ -216,7 +229,7 @@ void Processor<PointType>::savePcd(std::string file, typename pcl::PointCloud<Po
 
 template<typename PointType>
 bool Processor<PointType>::loadConfig(const std::string& configFile){
-    std::ifstream file(configFile)l
+    std::ifstream file(configFile);
     if (!file.is_open()){
         std::cerr << "Error: Cannot open config file: " << configFile << std::endl;
         return false;
@@ -234,7 +247,7 @@ bool Processor<PointType>::loadConfig(const std::string& configFile){
         }
 
         size_t pos = line.find('=');
-        if (pos == std::string::npos){
+        if (pos != std::string::npos){
             std::string key = trim(line.substr(0, pos));
             std::string value = trim(line.substr(pos + 1));
             configMap[key] = value;
@@ -290,12 +303,40 @@ bool Processor<PointType>::loadConfig(const std::string& configFile){
         if (configMap.find("maxClusterSize") != configMap.end()) {
             config_.maxClusterSize = std::stoi(configMap["maxClusterSize"]);
         }
+
+        if (configMap.find("renderSegementation") != configMap.end()) {
+            config_.renderSegementation = (configMap["renderSegementation"] == "true" || configMap["renderSegementation"] == "1");
+        }
+
+        if (configMap.find("renderAxisAlignedBoxes") != configMap.end()) {
+            config_.renderAxisAlignedBoxes = (configMap["renderAxisAlignedBoxes"] == "true" || configMap["renderAxisAlignedBoxes"] == "1");
+        }
+        
+        if (configMap.find("renderOrientedBoxes") != configMap.end()) {
+            config_.renderOrientedBoxes = (configMap["renderOrientedBoxes"] == "true" || configMap["renderOrientedBoxes"] == "1");
+        }
+
+        if (configMap.find("renderClusters") != configMap.end()) {
+            config_.renderClusters = (configMap["renderClusters"] == "true" || configMap["renderClusters"] == "1");
+        }
+
+        if (configMap.find("visualizerTurnedON") != configMap.end()) {
+            config_.visualizerTurnedON = (configMap["visualizerTurnedON"] == "true" || configMap["visualizerTurnedON"] == "1");
+        }
+        
+        if (configMap.find("obstacleCloudColor") != configMap.end()) {
+            config_.obstacleCloudColor = parseVector3f(configMap["obstacleCloudColor"]);
+        }
+
+        if (configMap.find("groundPlaneColor") != configMap.end()) {
+            config_.groundPlaneColor = parseVector3f(configMap["groundPlaneColor"]);
+        }
+        
     } catch (const std::exception& e){
         std::cerr << "Error parsing config file: "<< e.what() << std::endl;
         return false;
     }
 
-    std::cout << "configuration loaded successfully" << std::endl;
     return true;
 }
 
@@ -323,10 +364,33 @@ Eigen::Vector4f Processor<PointType>::parseVector4f(const std::string& str){
 }
 
 template<typename PointType>
+Eigen::Vector3f Processor<PointType>::parseVector3f(const std::string& str){
+    std::stringstream ss(str);
+    std::string item;
+    std::vector<float> values;
+
+    std::string cleaned = str;
+    if (cleaned.front() == '(' && cleaned.back() == ')'){
+        cleaned = cleaned.substr(1, cleaned.size() - 2);
+    }
+
+    std::stringstream cleanedSS(cleaned);
+    while (std::getline(cleanedSS, item, ',')){
+        values.push_back(std::stof(trim(item)));
+    }
+
+    if (values.size() != 3){
+        throw std::runtime_error("Vector3f must have 3 elements");
+    }
+
+    return Eigen::Vector3f(values[0], values[1], values[2]);
+}
+
+template<typename PointType>
 std::string Processor<PointType>::trim(const std::string& str){
     size_t first = str.find_first_not_of(' ');
-    if (first = std::string::npos){
-        return str;
+    if (first == std::string::npos){
+        return "";
     }
 
     size_t last = str.find_last_not_of(' ');
@@ -348,5 +412,71 @@ void Processor<PointType>::printConfig() const {
     std::cout << "clusterTolerance: " << config_.clusterTolerance << std::endl;
     std::cout << "minClusterSize: " << config_.minClusterSize << std::endl;
     std::cout << "maxClusterSize: " << config_.maxClusterSize << std::endl;
+    std::cout << "renderSegementation: " << (config_.renderSegementation ? "true" : "false") << std::endl;
+    std::cout << "renderAxisAlignedBoxes: " << (config_.renderAxisAlignedBoxes ? "true" : "false") << std::endl;
+    std::cout << "renderOrientedBoxes: " << (config_.renderOrientedBoxes ? "true" : "false") << std::endl;
+    std::cout << "renderClusters: " << (config_.renderClusters ? "true" : "false") << std::endl;
+    std::cout << "visualizerTurnedON: " << (config_.visualizerTurnedON ? "true" : "false") << std::endl;
+    std::cout << "obstacleCloudColor: (" << config_.obstacleCloudColor.transpose() << ")" << std::endl;
+    std::cout << "groundPlaneColor: (" << config_.groundPlaneColor.transpose() << ")" << std::endl;
     std::cout << "=============================" << std::endl;
+}
+
+template<typename PointType>
+std::vector<std::filesystem::path> Processor<PointType>::streamPCD(const std::string& path){
+    std::vector<std::filesystem::path> paths{std::filesystem::directory_iterator(path), std::filesystem::directory_iterator()};
+    std::sort(paths.begin(), paths.end());
+    return paths;
+}
+
+template<typename PointType>
+typename pcl::PointCloud<PointType>::Ptr Processor<PointType>::processCloud(
+    pcl::visualization::PCLVisualizer::Ptr& viewer,
+    const typename pcl::PointCloud<PointType>::Ptr& cloud){
+
+    // ============= FILTERING ============= 
+    typename pcl::PointCloud<PointType>::Ptr filteredCloud = this->filterCloud(cloud, config_.filterResolution, config_.minPoint, config_.maxPoint);
+
+    // ============= REGION REMOVAL ============= 
+    if (config_.enableRegionRemoval) {
+        filteredCloud = this->removeRegion(filteredCloud, config_.removeMinPoint, config_.removeMaxPoint);
+    }
+
+    // ============= PLANE SEGMENTATION ============= 
+    std::pair<typename pcl::PointCloud<PointType>::Ptr, typename pcl::PointCloud<PointType>::Ptr> segResult = this->segmentPlane(filteredCloud, config_.maxIterations, config_.distanceThreshold);
+
+    // ============= CLUSTERING ============= 
+    std::vector<typename pcl::PointCloud<PointType>::Ptr> clusters = this->clustering(segResult.first, config_.clusterTolerance, config_.minClusterSize, config_.maxClusterSize);
+    
+    // ============= VISUALIZATION ============= 
+    if (config_.visualizerTurnedON){
+
+        if (config_.renderSegementation){
+            visualizePointCloud<PointType>(viewer, segResult.first, "obstacleCloud", config_.obstacleCloudColor);
+        }
+        int clusterId = 0;
+
+        for (auto cluster : clusters){
+            std::vector<float> color = colorPalette[clusterId % colorPalette.size()];
+            Eigen::Vector3f colorVec(color[0], color[1], color[2]);
+            if (config_.renderAxisAlignedBoxes){
+                BoundingBox box = this->boundingBox(cluster);
+                visualizeBox<BoundingBox>(viewer, box, clusterId, colorVec);
+            }
+            if (config_.renderOrientedBoxes){
+                BoundingBoxQ box = this->boundingBoxQ(cluster);
+                visualizeBox<BoundingBoxQ>(viewer, box, clusterId, colorVec);
+            }
+            if (config_.renderClusters){
+                visualizePointCloud<PointType>(viewer, cluster, "cluster" + std::to_string(clusterId), colorVec);
+            }
+            clusterId++;
+        }
+
+        if (config_.renderSegementation){
+            visualizePointCloud<PointType>(viewer, segResult.second, "planeCloud", config_.groundPlaneColor);
+        }
+    }
+
+    return filteredCloud;
 }

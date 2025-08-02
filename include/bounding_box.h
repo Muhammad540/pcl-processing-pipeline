@@ -5,7 +5,7 @@
 
 struct BoundingBoxQ {
     // translation to represent the position of the box
-    Eigen::Vector3f position;
+    Eigen::Vector3f bboxTransform;
     // quaternion to represent the orientation of the box
     Eigen::Quaternionf bboxQuaternion;
     // length, width, height of the box

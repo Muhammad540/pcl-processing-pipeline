@@ -2,9 +2,70 @@
 
 A configurable C++ library for point cloud processing built on top of the Point Cloud Library (PCL). This library is designed as a pipeline which can be used in autonomous driving and robotics applications, eliminating the need to implement common point cloud processing operations from scratch.
 
-You just have to supply the point cloud input and set your desired parameters in the config file and the rest will be handled by the pipeline. It will output a processed point cloud in accordance with the parameters you have set. If you want to visualize the output, you can use the built in renderer as well. 
+You just have to supply the point cloud input and set your desired parameters in the config file and the rest will be handled by the pipeline. It will output a processed point cloud in accordance with the parameters you have set. If you want to visualize the output, you can use the built in renderer as well.
 
-Below you can also find a simple example as to how you can use this library in your ROS projects or standalone applications.
+## How to Use This Library
+
+The recommended way to use this library is by adding it as a **Git submodule** to your own CMake project.
+
+1.  **Add as a Submodule:**
+    In your project's root directory, run:
+    ```bash
+    git submodule add <this_repo_url> external/pcl-processing-pipeline
+    ```
+
+2.  **Include in your `CMakeLists.txt`:**
+    Add the following to your main `CMakeLists.txt` file:
+    ```cmake
+    # Add the submodule directory to your build
+    add_subdirectory(external/pcl-processing-pipeline)
+
+    # ... define your own executable ...
+    add_executable(your_app src/your_app.cpp)
+
+    # Link your application to the library
+    # This automatically handles all include paths and PCL dependencies.
+    target_link_libraries(your_app PRIVATE pcl_processor_lib)
+    ```
+
+3.  **Use in your Code:**
+    You can now include the processor header and use the class.
+    ```cpp
+    #include "processor.h" // This path should be available now
+
+    int main() {
+        Processor<pcl::PointXYZI> processor("path/to/your/config.txt");
+        auto cloud = processor.loadPcd("data.pcd");
+
+        // Process the cloud without visualization
+        auto processed_cloud = processor.processCloud(nullptr, cloud);
+
+        // ... do something with processed_cloud ...
+
+        return 0;
+    }
+    ```
+
+## Building the Example
+
+This repository includes an example executable to demonstrate its usefulness.
+
+### Prerequisites
+- PCL 1.12+
+- C++17 compiler
+- CMake 3.12+
+
+### Build Steps
+```bash
+git clone <this_repo_url>
+cd pcl-processing-pipeline
+
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+
+./pcl_processor_example ../test_data
+```
 
 ## Features
 
@@ -28,74 +89,30 @@ Below you can also find a simple example as to how you can use this library in y
 - **External Configuration**: All parameters configurable via text file `config.txt`
 - **Test at runtime**: Change parameters without recompilation
 
-## Installation
+## Configuration Parameters
 
-### Prerequisites
-- PCL 1.12+
-- C++17 compiler
-- CMake 3.12+
-
-### Usage Example
-```cpp
-#include "processor.h"
-
-int main() {
-    Processor<pcl::PointXYZI> processor("config.txt");
-    auto cloud = processor.loadPcd("data.pcd");
-    auto processed = processor.processCloud(nullptr, cloud);
-    return 0;
-```
-
-### Configuration Parameters
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| `filterResolution` | float | Voxel grid leaf size (meters) | 0.2 |
-| `minPoint` | Vector4f | ROI minimum bounds (x,y,z,1) | (-10,-5,-2,1) |
-| `maxPoint` | Vector4f | ROI maximum bounds (x,y,z,1) | (30,7,1,1) |
-| `enableCropBox` | bool | Enable spatial cropping | true |
-| `enableRegionRemoval` | bool | Enable ego vehicle removal | false |
-| `removeMinPoint` | Vector4f | Ego region min bounds | (-1.5,-1.7,-1,1) |
-| `removeMaxPoint` | Vector4f | Ego region max bounds | (2.6,1.7,-0.4,1) |
-| `maxIterations` | int | RANSAC max iterations | 100 |
-| `distanceThreshold` | float | RANSAC distance threshold | 0.3 |
-| `clusterTolerance` | float | Euclidean clustering tolerance | 1.0 |
-| `minClusterSize` | int | Minimum cluster size | 20 |
-| `maxClusterSize` | int | Maximum cluster size | 1000 |
-| `obstacleCloudColor` | Vector3f | Obstacle point color (R,G,B) | (1,0,0) |
-| `groundPlaneColor` | Vector3f | Ground plane color (R,G,B) | (0,1,0) |
-| `visualizerTurnedON` | bool | Enable visualization | true |
-| `CameraAngle` | int | Camera view (0-3) | 0 |
-| `renderSegementation` | bool | Show segmented clouds | true |
-| `renderAxisAlignedBoxes` | bool | Show AABB boxes | true |
-| `renderOrientedBoxes` | bool | Show OBB boxes | false |
-| `renderClusters` | bool | Show clustered objects | true |
-
-## Integration
-
-### ROS Integration
-```cpp
-// In your ROS node
-#include "processor.h"
-
-class PointCloudProcessor {
-private:
-    Processor<pcl::PointXYZI> processor_;
-    
-public:
-    PointCloudProcessor() : processor_("config.txt") {}
-    
-    void pointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& msg) {
-        pcl::PointCloud<pcl::PointXYZI>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZI>);
-        pcl::fromROSMsg(*msg, *cloud);
-        
-        // Process without visualization for ROS
-        auto processed = processor_.processCloud(nullptr, cloud);
-        
-        // You can use the processed cloud for your own purposes
-    }
-};
-```
+| Parameter              | Type       | Description                        |
+| ---------------------- | ---------- | ---------------------------------- |
+| `filterResolution`     | `float`    | Voxel grid leaf size (meters)      |
+| `minPoint`             | `Vector4f` | ROI minimum bounds (x,y,z,1)       |
+| `maxPoint`             | `Vector4f` | ROI maximum bounds (x,y,z,1)       |
+| `enableCropBox`        | `bool`     | Enable spatial cropping            |
+| `enableRegionRemoval`  | `bool`     | Enable ego vehicle removal         |
+| `removeMinPoint`       | `Vector4f` | Ego region min bounds              |
+| `removeMaxPoint`       | `Vector4f` | Ego region max bounds              |
+| `maxIterations`        | `int`      | RANSAC max iterations              |
+| `distanceThreshold`    | `float`    | RANSAC distance threshold          |
+| `clusterTolerance`     | `float`    | Euclidean clustering tolerance     |
+| `minClusterSize`       | `int`      | Minimum cluster size               |
+| `maxClusterSize`       | `int`      | Maximum cluster size               |
+| `obstacleCloudColor`   | `Vector3f` | Obstacle point color (R,G,B)       |
+| `groundPlaneColor`     | `Vector3f` | Ground plane color (R,G,B)         |
+| `visualizerTurnedON`   | `bool`     | Enable visualization               |
+| `CameraAngle`          | `int`      | Camera view (0-3)                  |
+| `renderSegementation`  | `bool`     | Show segmented clouds              |
+| `renderAxisAlignedBoxes` | `bool`     | Show AABB boxes                    |
+| `renderOrientedBoxes`  | `bool`     | Show OBB boxes                     |
+| `renderClusters`       | `bool`     | Show clustered objects             |
 
 ## Future Improvements
 

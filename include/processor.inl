@@ -323,7 +323,7 @@ bool Processor<PointType>::loadConfig(const std::string& configFile){
         if (configMap.find("visualizerTurnedON") != configMap.end()) {
             config_.visualizerTurnedON = (configMap["visualizerTurnedON"] == "true" || configMap["visualizerTurnedON"] == "1");
         }
-        
+
         if (configMap.find("obstacleCloudColor") != configMap.end()) {
             config_.obstacleCloudColor = parseVector3f(configMap["obstacleCloudColor"]);
         }
@@ -449,7 +449,7 @@ typename pcl::PointCloud<PointType>::Ptr Processor<PointType>::processCloud(
     std::vector<typename pcl::PointCloud<PointType>::Ptr> clusters = this->clustering(segResult.first, config_.clusterTolerance, config_.minClusterSize, config_.maxClusterSize);
     
     // ============= VISUALIZATION ============= 
-    if (config_.visualizerTurnedON){
+    if (config_.visualizerTurnedON && viewer){
 
         if (config_.renderSegementation){
             visualizePointCloud<PointType>(viewer, segResult.first, "obstacleCloud", config_.obstacleCloudColor);

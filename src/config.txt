@@ -1,0 +1,23 @@
+# Point Cloud Processor Configuration File
+# Lines starting with # are comments
+# Format: parameter_name = value
+
+# Filtering Parameters
+filterResolution = 0.2
+minPoint = (-10, -5, -2, 1)
+maxPoint = (10, 8, 1, 1)
+enableCropBox = false
+
+# Region Removal Parameters (e.g., like if you want to remove points covering the body of your vehicle/robot)
+removeMinPoint = (-1.5, -1.7, -1, 1)
+removeMaxPoint = (2.6, 1.7, -0.4, 1)
+enableRegionRemoval = false
+
+# Segmentation Parameters
+maxIterations = 25
+distanceThreshold = 0.3
+
+# Clustering Parameters
+clusterTolerance = 0.53
+minClusterSize = 10
+maxClusterSize = 500

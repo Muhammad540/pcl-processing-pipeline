@@ -1,3 +1,5 @@
+# ![Logo](logo.jpg)
+
 # PCL Point Cloud Processing Pipeline
 
 A configurable C++ library for point cloud processing built on top of the Point Cloud Library (PCL). This library is designed as a pipeline which can be used in autonomous driving and robotics applications, eliminating the need to implement common point cloud processing operations from scratch.

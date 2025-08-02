@@ -1,4 +1,8 @@
-/** A simple example of how you can use the library to stream the PCD files and run them through the pipeline and visualize the results.*/
+/**
+ * An example demonstrating how to use the pcl_processor_lib.
+ * This executable streams PCD files from a specified directory, processes them
+ * through the pipeline, and visualizes the results in real time.
+ */
 #include "processor.h"
 #include <memory>
 #include <signal.h>
@@ -21,8 +25,10 @@ int main(int argc, char* argv[]){
     signal(SIGTERM, signalHandler);
 
     pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+     // The config file is expected to be in the same directory as the executable but you can change it to any other path if you want
     auto processorCloud = std::make_unique<Processor<pcl::PointXYZI>>("config.txt");
 
+    // --- Initialize Visualizer and Data Stream ---
     // There are 4 camera angles: | XY | TopDown | Side | FPS |
     CameraAngle setangle = CameraAngle::XY;
     initializeViewer(setangle, viewer);

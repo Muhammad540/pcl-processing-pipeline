@@ -139,6 +139,9 @@ make -j$(nproc)
 - [ ] **Plugin System**: Extensible processing modules
 - [ ] **Docker Support**: Containerized deployment
 
+### Other Useful Point Cloud Processing tools
+- [Point Cloud Merger](https://github.com/RobinSchmid7/pointcloud_merger): This tool allows for cropping, voxelization, and merging of multiple point clouds based on timestamps. It operates in real time on a single CPU.
+
 ## Contributing
 
 I welcome contributions!
